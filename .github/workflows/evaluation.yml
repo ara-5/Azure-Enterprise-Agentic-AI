@@ -1,0 +1,66 @@
+name: RAG Evaluation
+
+# Runs the golden-dataset evaluation (backend/evaluation) against the real
+# Azure OpenAI + AI Search resources and fails if average quality drops
+# below the threshold. Separate from cd.yml because it needs data-plane
+# RBAC roles (Cognitive Services OpenAI User, Search Index Data Contributor)
+# on top of what the deploy identity needs -- see docs/cicd-setup.md.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * 1" # weekly, Monday 06:00 UTC
+  pull_request:
+    branches: [main]
+    paths:
+      - "backend/app/rag/**"
+      - "backend/app/agents/**"
+      - "backend/evaluation/**"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    environment: production
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+
+      - run: pip install -r requirements.txt
+
+      - name: Run evaluation harness
+        run: python -m evaluation.run_evaluation --threshold 3.5
+        env:
+          APP_ENV: production
+          DISABLE_AUTH: "true" # no HTTP layer involved; harness calls the pipeline in-process
+          DEMO_MODE: "false" # must exercise the real Azure OpenAI/AI Search pipeline, not the local demo fallback
+          AZURE_OPENAI_ENDPOINT: ${{ vars.AZURE_OPENAI_ENDPOINT }}
+          AZURE_OPENAI_CHAT_DEPLOYMENT: ${{ vars.AZURE_OPENAI_CHAT_DEPLOYMENT }}
+          AZURE_OPENAI_EMBEDDING_DEPLOYMENT: ${{ vars.AZURE_OPENAI_EMBEDDING_DEPLOYMENT }}
+          AZURE_SEARCH_ENDPOINT: ${{ vars.AZURE_SEARCH_ENDPOINT }}
+          AZURE_SEARCH_INDEX_NAME: ${{ vars.AZURE_SEARCH_INDEX_NAME }}
+
+      - name: Upload evaluation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evaluation-report
+          path: backend/evaluation/results/*.json

@@ -1,0 +1,5 @@
+{"question": "What is the company's remote work policy?", "ground_truth": "Employees may work remotely up to 3 days per week with manager approval, as stated in the HR handbook.", "expected_sources": ["hr-handbook.md"]}
+{"question": "How many days of PTO do full-time employees accrue per year?", "ground_truth": "Full-time employees accrue 20 days of paid time off per year.", "expected_sources": ["hr-handbook.md"]}
+{"question": "What is the incident response SLA for a Severity 1 outage?", "ground_truth": "Severity 1 incidents must be acknowledged within 15 minutes and have an initial mitigation within 1 hour.", "expected_sources": ["incident-response-runbook.md"]}
+{"question": "Who approves expense reports over $5,000?", "ground_truth": "Expense reports over $5,000 require VP-level approval in addition to the manager's approval.", "expected_sources": ["expense-policy.md"]}
+{"question": "What data classification level applies to customer PII?", "ground_truth": "Customer PII is classified as Confidential and must be encrypted at rest and in transit.", "expected_sources": ["data-classification-policy.md"]}

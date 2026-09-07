@@ -1,0 +1,12 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "baseName": { "value": "eaap-dev" },
+    "entraTenantId": { "value": "<your-tenant-id>" },
+    "entraApiClientId": { "value": "<api-app-registration-client-id>" },
+    "entraApiAudience": { "value": "api://<api-app-registration-client-id>" },
+    "entraAllowedGroups": { "value": "" },
+    "costBudgetMonthlyUsd": { "value": "200" }
+  }
+}

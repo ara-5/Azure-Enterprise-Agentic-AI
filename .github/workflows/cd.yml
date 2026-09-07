@@ -1,0 +1,98 @@
+name: CD
+
+# Builds & pushes both images to ACR, then updates the two Container Apps
+# to the new images. Auth to Azure is OIDC (azure/login with a federated
+# credential) -- no client secret stored in GitHub. See docs/cicd-setup.md
+# for the one-time `az ad app federated-credential create` setup and the
+# full list of required repo secrets/variables.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - ".github/workflows/cd.yml"
+  workflow_dispatch:
+
+permissions:
+  id-token: write # required for OIDC login
+  contents: read
+
+env:
+  RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+  ACR_NAME: ${{ vars.AZURE_ACR_NAME }}
+  BACKEND_APP_NAME: ${{ vars.BACKEND_CONTAINER_APP_NAME }}
+  FRONTEND_APP_NAME: ${{ vars.FRONTEND_CONTAINER_APP_NAME }}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Log in to ACR
+        run: az acr login --name "$ACR_NAME"
+
+      - name: Set image tag
+        run: echo "IMAGE_TAG=${GITHUB_SHA::12}" >> "$GITHUB_ENV"
+
+      - name: Build & push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          push: true
+          tags: |
+            ${{ env.ACR_NAME }}.azurecr.io/eaap-backend:${{ env.IMAGE_TAG }}
+            ${{ env.ACR_NAME }}.azurecr.io/eaap-backend:latest
+
+      - name: Build & push frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: frontend
+          push: true
+          tags: |
+            ${{ env.ACR_NAME }}.azurecr.io/eaap-frontend:${{ env.IMAGE_TAG }}
+            ${{ env.ACR_NAME }}.azurecr.io/eaap-frontend:latest
+          build-args: |
+            VITE_ENTRA_CLIENT_ID=${{ vars.VITE_ENTRA_CLIENT_ID }}
+            VITE_ENTRA_TENANT_ID=${{ vars.VITE_ENTRA_TENANT_ID }}
+            VITE_API_SCOPE=${{ vars.VITE_API_SCOPE }}
+            VITE_API_BASE_URL=${{ vars.VITE_API_BASE_URL }}
+            VITE_DISABLE_AUTH=false
+
+      - name: Deploy backend revision
+        run: |
+          az containerapp update \
+            --name "$BACKEND_APP_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --image "${ACR_NAME}.azurecr.io/eaap-backend:${IMAGE_TAG}"
+
+      - name: Deploy frontend revision
+        run: |
+          az containerapp update \
+            --name "$FRONTEND_APP_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --image "${ACR_NAME}.azurecr.io/eaap-frontend:${IMAGE_TAG}"
+
+      - name: Smoke test backend health endpoint
+        run: |
+          FQDN=$(az containerapp show --name "$BACKEND_APP_NAME" --resource-group "$RESOURCE_GROUP" --query properties.configuration.ingress.fqdn -o tsv)
+          for i in {1..10}; do
+            if curl -sf "https://${FQDN}/health"; then
+              echo "Backend healthy."
+              exit 0
+            fi
+            echo "Waiting for backend to become healthy... ($i/10)"
+            sleep 10
+          done
+          echo "Backend did not become healthy in time." >&2
+          exit 1

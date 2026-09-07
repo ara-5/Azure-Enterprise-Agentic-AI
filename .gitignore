@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# Node / React
+node_modules/
+dist/
+build/
+.vite/
+*.local
+*.tsbuildinfo
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+local.settings.json
+
+# Azure / IaC
+.azure/
+infra/*.bicepparam.local.json
+infra/last-deploy-outputs.json
+*.tfstate
+*.tfstate.*
+.terraform/
+
+# Evaluation outputs
+backend/evaluation/results/
+backend/evaluation/*.report.json
+
+# Logs
+*.log
+logs/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
